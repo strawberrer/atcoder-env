@@ -1,0 +1,427 @@
+#!/bin/bash
+CONFIG_PATH=~/.config/atcoder-env
+if [ ! -d $CONFIG_PATH ]; then
+    mkdir $CONFIG_PATH
+fi
+if [ ! -e $CONFIG_PATH/template_a.cpp ]; then
+    touch $CONFIG_PATH/template_a.cpp
+fi
+if [ ! -e $CONFIG_PATH/template_h.cpp ]; then
+    touch $CONFIG_PATH/template_h.cpp
+fi
+if [ ! -e $CONFIG_PATH/config.json ]; then
+    touch $CONFIG_PATH/config.json
+    config={}
+    config=$(echo $config | jq '. += {"command": {}}')
+    config=$(echo $config | jq '.command += {"compile": ""}')
+    config=$(echo $config | jq '.command+= {"run": ""}')
+    config=$(echo $config | jq '. += {"template": {}}')
+    config=$(echo $config | jq '.template += {"algorithm": {}}')
+    config=$(echo $config | jq '.template += {"heuristic": {}}')
+    config=$(echo $config | jq '.template.algorithm += {"cursor-row-preset": 0}')
+    config=$(echo $config | jq '.template.algorithm += {"cursor-column-preset": 0}')
+    config=$(echo $config | jq '.template.heuristic += {"cursor-row-preset": 0}')
+    config=$(echo $config | jq '.template.heuristic += {"cursor-column-preset": 0}')
+    echo $config | jq . > $CONFIG_PATH/config.json
+fi
+function open () {
+    code -g $1:$2:$3
+}
+
+function move() {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+}
+
+function start () {
+    #ulrを取得
+    url=$1
+
+    #contest_id,problem_idを取得
+    split_url=(${url//// })
+    contest_id=${split_url[3]}
+    problem_id=${split_url[5]}
+
+    #問題ごとのディレクトリを作成、移動
+    if [ ! -d $contest_id ]; then
+        mkdir $contest_id
+    fi
+    cd $contest_id
+    if [ ! -d $problem_id ]; then
+        mkdir $problem_id
+    fi
+    cd $problem_id
+
+    #プログラムファイルを作成
+    if [ ! -e $problem_id.cpp ]; then
+        touch $problem_id.cpp
+        cat $CONFIG_PATH/template_a.cpp > $problem_id.cpp
+    fi
+
+    #入力ファイルを作成
+    if [ ! -e $problem_id.in ]; then
+        touch $problem_id.in
+    fi
+    
+    #vscodeで開く
+    row=$(jq '.template.["cursor-row-preset"]' $CONFIG_PATH/config.json)
+    column=$(jq '.template.["cursor-column-preset"]' $CONFIG_PATH/config.json)
+    open $problem_id.in 0 0
+    open $problem_id.cpp $row $column
+
+    #テストケースを取得
+    if [ -d test ]; then
+        rm -r test
+    fi
+    oj download $url -s
+
+    #情報を記録
+    time=$(date +%s)
+    task=$(cat $CONFIG_PATH/task.json)
+    task=$(echo $task | jq --arg url $url '. + {"url": $url}')
+    task=$(echo $task | jq --arg contest_id $contest_id '. + {"contest_id": $contest_id}')
+    task=$(echo $task | jq --arg problem_id $problem_id '. + {"problem_id": $problem_id}')
+    task=$(echo $task | jq --arg time $time '. + {"time": $time}')
+    echo $task | jq .  > $CONFIG_PATH/task.json
+}
+
+function init () {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+    #プログラムファイルをテンプレートに置換
+    cat $CONFIG_PATH/template.cpp > $problem_id.cpp
+    
+    #vscodeで開く
+    open $problem_id.cpp
+}
+
+function run () {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+    #コンパイル
+    g++ -std=c++20 $problem_id.cpp
+
+    #実行
+    ./a.out < $problem_id.in
+}
+
+function testsub () {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+    #コンパイル
+    g++ -std=c++20 $problem_id.cpp
+
+    #テストして提出
+    oj t -S -t 2 && oj s $url $problem_id.cpp --yes
+}
+
+function submit () {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+    #提出
+    oj s $url $problem_id.cpp
+}
+
+function hstart () {
+    #ulrを取得
+    url=$1
+
+    #contest_id,problem_idを取得
+    split_url=(${url//// })
+    contest_id=ahc
+    problem_id=${split_url[3]}
+
+    #問題ごとのディレクトリを作成、移動
+    if [ ! -d $contest_id ]; then
+        mkdir $contest_id
+    fi
+    cd $contest_id
+    if [ ! -d $problem_id ]; then
+        mkdir $problem_id
+    fi
+    cd $problem_id
+
+    #プログラムファイルを作成
+    if [ ! -e $problem_id.cpp ]; then
+        touch $problem_id.cpp
+        cat $CONFIG_PATH/template_h.cpp > $problem_id.cpp
+    fi
+
+    #ツールをダウンロード
+    if [ ! -d tools ]; then
+        vis_urls=($(curl -s $url | grep -oP '(?<=href=")[^"]*\.zip'))
+        for vis_url in "${vis_urls[@]}"
+        do
+            sleep 1
+            wget -O $contest_id.zip $vis_url
+            dir_name=$(unzip -l $contest_id.zip | awk '{print $4}' | grep '/' | cut -d '/' -f 1 | sort | uniq)
+            if [ "$dir_name" == "tools" ]; then
+                unzip -n $contest_id.zip
+                break
+            fi
+        done
+        rm $contest_id.zip
+    fi
+    
+    #ツールをビルド
+    cd tools
+    cargo build --release
+
+    #htmlを取得
+    cd ..
+    if [ ! -d cache ]; then
+        mkdir cache
+    fi
+    wget -O cache/site.html $url
+
+    #情報を記録
+    time=$(date +%s)
+    task=$(cat $CONFIG_PATH/task.json)
+    task=$(echo $task | jq --arg url $url '. + {"url": $url}')
+    task=$(echo $task | jq --arg contest_id $contest_id '. + {"contest_id": $contest_id}')
+    task=$(echo $task | jq --arg problem_id $problem_id '. + {"problem_id": $problem_id}')
+    task=$(echo $task | jq --arg time $time '. + {"time": $time}')
+    echo $task | jq .  > $CONFIG_PATH/task.json
+}
+
+function hgen() {
+    n_case=$1
+
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+
+    contest_type=$(basename $(dirname $(pwd)))
+    if [ $contest_type != 'ahc' ]; then
+        echo "you are not in AHC"
+        echo "please run: ace hs [url of AHC]"
+    fi
+
+    if [ -d in ]; then
+        rm -r in
+    fi
+
+    seq 0 $(($n_case-1)) > tools/seeds.txt
+    if [ problem_id == 'ahc001' ]; then
+        tools/target/release/gen < tools/seeds.txt
+    else
+        tools/target/release/gen tools/seeds.txt
+    fi
+}
+
+function htest() {
+    #取り組み中の問題を取得
+    url=$(jq -r .url $CONFIG_PATH/task.json)
+    contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
+    problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    
+    #取り組み中の問題のディレクトリに移動
+    cd $contest_id/$problem_id
+
+    #フォルダを作成
+    if [ -d out ]; then
+        rm -r out
+    fi
+    mkdir out
+    if [ -d out2 ]; then
+        rm -r out2
+    fi
+    mkdir out2
+    if [ -d score ]; then
+        rm -r score
+    fi
+    mkdir score
+
+    #コンパイル
+    compile_cmd=$(jq -r .command.compile $CONFIG_PATH/config.json)
+    eval $compile_cmd
+
+    #テスト
+    cat /dev/null > time.log
+    run_cmd=$(jq -r .command.run $CONFIG_PATH/config.json)
+    find in/ -type f | parallel --no-notice "(time $run_cmd < {} > out/{/.}.txt 2> out2/{/.}.txt) 2>&1 | sed -n 's/real[ \t]*//p' | sed \"s|^|{}: |\" >> time.log"
+
+    #スコアを計算
+    find in/ -type f | parallel "tools/target/release/vis {} out/{/.}.txt > score/{/.}.txt 2>&1"
+
+    score_sum=0
+    n_case=0
+    error=()
+    for score_txt in score/*; do
+        score=$(sed -n 's/.*Score = \([0-9]\+\).*/\1/p' $score_txt)
+        score_sum=$(echo "$score_sum + $score" | bc)
+        n_case=$(($n_case+1))
+        if [ $score -eq 0 ]; then
+            error+="----$score_txt\n--------$(cat $score_txt)\n"
+        fi
+    done
+    if [ ${#error[@]} -ne 0 ]; then
+        echo 'error:'
+        echo -e $error
+    fi
+    echo 'longest run time:'
+    echo -n '----'
+    awk '{
+    split($0, a, ": "); 
+    time = a[2]; 
+    if (time ~ /m/) { 
+        split(time, b, "m"); 
+        total = b[1] * 60 + b[2]; 
+    } else { 
+        total = time; 
+    } 
+    if (total > max) { 
+        max = total; 
+        file = a[1]; 
+        max_time = a[2];  # 実行時間を保存
+    }
+    } 
+    END { 
+    print file ": " max_time;  # ファイル名と実行時間を出力
+    }' time.log
+    ave_score=$(echo "scale=5; $score_sum / $n_case" | bc)
+    printf "average_score: %.5f\n" "$ave_score"
+}
+
+function usage() {
+  echo "Usage: ace [-h] [-v]"
+  echo "          {start,s,init,i,testsub,ts,time,t,template}"
+  echo
+  echo "this tool requires online-judge-tools and vscode"
+  echo
+  echo "positional arguments:"
+  echo " {start,s,init,i,testsub,ts,time,t,template}"
+  echo "  start (s) [url]     start the problem"
+  echo "  init (i)            initialize your code with a template"
+  echo "  run (r)             run your code with .in input"
+  echo "  testsub (ts)        test your code and submit if AC"
+  echo "  time (t)            displays the time elapsed since the problem was started"
+  echo "  template            open template"
+  echo
+  echo "options:"
+  echo "  -h, --help    show this help message"
+  echo "  -v, --version print the atcoder-env version number"
+  echo "  -f, --file    specify the input file"
+}
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            exit 0
+        ;;
+        -v|--version)
+            echo "atcoder-env 1.0"
+            exit 0
+        ;;
+        s|start)
+            if [[ -n "$2" ]]; then
+                start "$2"
+                shift 2
+            else
+                echo "error: -i option requires a URL argument." >&2
+                exit 1
+            fi
+        ;;
+        i|init)
+            init
+            exit 0
+        ;;
+        r|run)
+            run
+            exit 0
+        ;;
+        ts|testsub)
+            testsub
+            exit 0
+        ;;
+        sub|submit)
+            submit
+            exit 0
+        ;;
+        t|time)
+            start_time=$(jq -r .time $CONFIG_PATH/task.json)
+            now_time=$(date +%s)
+            elapsed_time=$(($now_time-$start_time))
+            hours=$((elapsed_time / 3600))
+            minutes=$(((elapsed_time % 3600) / 60))
+            seconds=$((elapsed_time % 60))
+            printf "%d h %d m %d s\n" $hours $minutes $seconds
+            exit 0
+        ;;
+        template)
+            code $CONFIG_PATH/template_a.cpp
+            exit 0
+        ;;
+        hs|hstart)
+            if [[ -n "$2" ]]; then
+                hstart "$2"
+                shift 2
+            else
+                echo "error: -i option requires a URL argument." >&2
+                exit 1
+            fi
+        ;;
+        hg|hgen)
+            if [[ -n "$2" ]]; then
+                hgen "$2"
+                shift 2
+            else
+                echo "error: -i option requires a n_case argument." >&2
+                exit 1
+            fi
+        ;;
+        ht|htest)
+            htest
+            exit 0
+        ;;
+        htemplate)
+            code $CONFIG_PATH/template_h.cpp
+            exit 0
+        ;;
+        config)
+            code $CONFIG_PATH/config.json
+            exit 0
+        ;;
+        *)
+            echo "invalid option: $1" >&2
+            exit 1
+        ;;
+    esac
+done
+
+
