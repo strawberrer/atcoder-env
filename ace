@@ -72,7 +72,7 @@ function start () {
     row=$(jq '.template.["cursor-row-preset"]' $CONFIG_PATH/config.json)
     column=$(jq '.template.["cursor-column-preset"]' $CONFIG_PATH/config.json)
     open $problem_id.in 0 0
-    open $problem_id.cpp $row $column
+    open $problem_id.cpp 70 2
 
     #テストケースを取得
     if [ -d test ]; then
@@ -184,6 +184,7 @@ function hstart () {
             sleep 1
             wget -O $contest_id.zip $vis_url
             dir_name=$(unzip -l $contest_id.zip | awk '{print $4}' | grep '/' | cut -d '/' -f 1 | sort | uniq)
+            echo $dir_name
             if [ "$dir_name" == "tools" ]; then
                 unzip -n $contest_id.zip
                 break
@@ -201,7 +202,6 @@ function hstart () {
     if [ ! -d cache ]; then
         mkdir cache
     fi
-    wget -O cache/site.html $url
 
     #情報を記録
     time=$(date +%s)
@@ -248,6 +248,7 @@ function htest() {
     url=$(jq -r .url $CONFIG_PATH/task.json)
     contest_id=$(jq -r .contest_id $CONFIG_PATH/task.json)
     problem_id=$(jq -r .problem_id $CONFIG_PATH/task.json)
+    code_id=_$1
     
     #取り組み中の問題のディレクトリに移動
     cd $contest_id/$problem_id
@@ -273,7 +274,8 @@ function htest() {
     #テスト
     cat /dev/null > time.log
     run_cmd=$(jq -r .command.run $CONFIG_PATH/config.json)
-    find in/ -type f | parallel --no-notice "(time $run_cmd < {} > out/{/.}.txt 2> out2/{/.}.txt) 2>&1 | sed -n 's/real[ \t]*//p' | sed \"s|^|{}: |\" >> time.log"
+    find in/ -type f | parallel --no-notice \
+  "timeout 5s bash -c 'time ./a.out < {} > out/{/.}.txt 2> out2/{/.}.txt' 2>&1 | sed -n 's/real[ \t]*//p' | sed \"s|^|{}: |\" >> time.log"
 
     #スコアを計算
     find in/ -type f | parallel "tools/target/release/vis {} out/{/.}.txt > score/{/.}.txt 2>&1"
@@ -406,7 +408,13 @@ while [[ "$#" -gt 0 ]]; do
             fi
         ;;
         ht|htest)
-            htest
+            if [[ -n "$2" ]]; then
+                htest "$2"
+                shift 2
+            else
+                echo "error: -i option requires a idx of program argument." >&2
+                exit 1
+            fi
             exit 0
         ;;
         htemplate)
